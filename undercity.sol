@@ -239,12 +239,12 @@ contract Undercity is Context, Ownable, ERC20  {
 
     mapping (address => bool) private _isExcludedFromCooldown;
 
-    address constant private PRESALE_WALLET = 0x7B0b6dF7514E095a4dc8043C64D4fEBC7c187388;
-    address constant private RESERVE_WALLET = 0xb8f24EE6d8e6f937C11465598b3fE5771A9951DA;
-    address constant private TEAM_WALLET = 0x81ee8626949EEA3aBbc2fE97B573F44dFC6283a8;
-    address constant private MARKETING_WALLET = 0x851FA25DEB1B2D24750A3424e6033077136406a0;
-    address constant private AIRDROP_WALLET = 0x0dD2df837a369399eBEb9264C0af79F1feBd3f34;
-    address constant private DEAD = 0x000000000000000000000000000000000000dEaD;
+    address constant private _PRESALE_WALLET = 0x7B0b6dF7514E095a4dc8043C64D4fEBC7c187388;
+    address constant private _RESERVE_WALLET = 0xb8f24EE6d8e6f937C11465598b3fE5771A9951DA;
+    address constant private _TEAM_WALLET = 0x81ee8626949EEA3aBbc2fE97B573F44dFC6283a8;
+    address constant private _MARKETING_WALLET = 0x851FA25DEB1B2D24750A3424e6033077136406a0;
+    address constant private _AIRDROP_WALLET = 0x0dD2df837a369399eBEb9264C0af79F1feBd3f34;
+    address constant private _DEAD = 0x000000000000000000000000000000000000dEaD;
     
     // CoolDown system
     mapping(address => uint256) private _lastTimeTx;
@@ -270,11 +270,11 @@ contract Undercity is Context, Ownable, ERC20  {
 
     constructor() ERC20("Undercity", "UNDER") { 
         // Create supply
-        _mint(PRESALE_WALLET, 3_705_000 * 10**18);
-        _mint(RESERVE_WALLET, 969_000 * 10**18);
-        _mint(TEAM_WALLET, 570_000 * 10**18);
-        _mint(MARKETING_WALLET, 285_000 * 10**18);
-        _mint(AIRDROP_WALLET, 171_000 * 10**18);
+        _mint(_PRESALE_WALLET, 3_705_000 * 10**18);
+        _mint(_RESERVE_WALLET, 969_000 * 10**18);
+        _mint(_TEAM_WALLET, 570_000 * 10**18);
+        _mint(_MARKETING_WALLET, 285_000 * 10**18);
+        _mint(_AIRDROP_WALLET, 171_000 * 10**18);
 
          // Create V2 pairs
         IUniswapV2Factory uniswapV2Factory = IUniswapV2Factory(UNISWAPV2_ROUTER.factory());
@@ -296,7 +296,7 @@ contract Undercity is Context, Ownable, ERC20  {
 
         excludeFromCooldown(owner(),true);
         excludeFromCooldown(address(this),true);
-        excludeFromCooldown(PRESALE_WALLET,true);
+        excludeFromCooldown(_PRESALE_WALLET,true);
 
         // To avoid remove LP issues
         excludeFromCooldown(address(UNISWAPV2_ROUTER),true);
@@ -330,7 +330,7 @@ contract Undercity is Context, Ownable, ERC20  {
     }
 
     function burn(uint256 amount) external returns (bool) {
-        _transfer(_msgSender(), DEAD, amount);
+        _transfer(_msgSender(), _DEAD, amount);
         emit Burn(amount);
         return true;
     }
@@ -366,18 +366,13 @@ contract Undercity is Context, Ownable, ERC20  {
         }
     }
 
-    function withdrawStuckETH(address payable to) external onlyOwner {
-        require(address(this).balance > 0, "UNDER: There are no ETHs in the contract");
-        to.sendValue(address(this).balance);
-    } 
-
     function withdrawStuckERC20Tokens(address token, address to) external onlyOwner {
         require(IERC20(token).balanceOf(address(this)) > 0, "UNDER: There are no tokens in the contract");
         require(IERC20(token).transfer(to, IERC20(token).balanceOf(address(this))));
     }
 
     function getCirculatingSupply() external view returns (uint256) {
-        return totalSupply() - balanceOf(DEAD) - balanceOf(address(0));
+        return totalSupply() - balanceOf(_DEAD) - balanceOf(address(0));
     }
 
     function isExcludedFromCooldown(address account) public view returns(bool) {
