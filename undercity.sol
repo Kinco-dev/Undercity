@@ -215,6 +215,16 @@ interface IUniswapV2Router02 {
     function factory() external pure returns (address);
     function WETH() external pure returns (address);
 }
+
+interface IUniswapV3Factory {
+
+    event PoolCreated(address indexed token0, address indexed token1, uint24 indexed fee, int24 tickSpacing, address pool);
+
+    function createPool(address tokenA, address tokenB, uint24 fee) external returns (address pool);
+    function getPool(address tokenA, address tokenB, uint24 fee) external returns (address pool);
+
+
+}
 library Address{
     function sendValue(address payable recipient, uint256 amount) internal {
         require(address(this).balance >= amount, "Address: insufficient balance");
@@ -241,11 +251,12 @@ contract Undercity is Context, Ownable, ERC20  {
     bool public coolDownEnabled = true;
     uint32 public coolDownTime = 60 seconds;
 
-    // LP system
+    // Routers and Factories
     IUniswapV2Router02 constant private UNISWAPV2_ROUTER = IUniswapV2Router02(0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D);
-    IUniswapV2Router02 constant private UNISWAPV3_ROUTER = IUniswapV2Router02(0xE592427A0AEce92De3Edee1F18E0157C05861564);
 
-    address constant private USDT = 0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984;//0xdAC17F958D2ee523a2206206994597C13D831ec7;
+    IUniswapV3Factory constant private UNISWAPV3_FACTORY = IUniswapV3Factory(0x1F98431c8aD98523631AE4a59f267346ea31F984);
+    address constant private USDT = 0xdAC17F958D2ee523a2206206994597C13D831ec7;
+    address constant private WETH = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
     // Any transfer to these addresses could be subject to some cooldown
     mapping (address => bool) private _automatedMarketMakerPairs;
 
@@ -259,7 +270,7 @@ contract Undercity is Context, Ownable, ERC20  {
 
     constructor() ERC20("Undercity", "UNDER") { 
         // Create supply
-        _mint(_msgSender(), 3_705_000 * 10**18); // TODO PRESALE_WALLET
+        _mint(PRESALE_WALLET, 3_705_000 * 10**18);
         _mint(RESERVE_WALLET, 969_000 * 10**18);
         _mint(TEAM_WALLET, 570_000 * 10**18);
         _mint(MARKETING_WALLET, 285_000 * 10**18);
@@ -273,12 +284,23 @@ contract Undercity is Context, Ownable, ERC20  {
         _setAutomatedMarketMakerPair(uniswapV2USDTPair, true);
 
         // Create V3 pairs
-        // TODO
+        address uniswapV3ETHPair500 = UNISWAPV3_FACTORY.createPool(WETH,address(this),500);
+        address uniswapV3ETHPair3000 = UNISWAPV3_FACTORY.createPool(WETH,address(this),3000);
+        address uniswapV3ETHPair10000 = UNISWAPV3_FACTORY.createPool(WETH,address(this),10000);
+        _setAutomatedMarketMakerPair(uniswapV3ETHPair500, true);
+        _setAutomatedMarketMakerPair(uniswapV3ETHPair3000, true);
+        _setAutomatedMarketMakerPair(uniswapV3ETHPair10000, true);
+
+        address uniswapV3USDTPair3000 = UNISWAPV3_FACTORY.createPool(address(this),USDT,3000);
+        _setAutomatedMarketMakerPair(uniswapV3USDTPair3000, true);
 
         excludeFromCooldown(owner(),true);
         excludeFromCooldown(address(this),true);
         excludeFromCooldown(PRESALE_WALLET,true);
 
+        // To avoid remove LP issues
+        excludeFromCooldown(address(UNISWAPV2_ROUTER),true);
+        excludeFromCooldown(address(0xC36442b4a4522E871399CD717aBDD847Ab11FE88),true);
     }
 
 
@@ -344,12 +366,12 @@ contract Undercity is Context, Ownable, ERC20  {
         }
     }
 
-    function withdrawStuckBNB(address payable to) external onlyOwner {
-        require(address(this).balance > 0, "UNDER: There are no BNBs in the contract");
+    function withdrawStuckETH(address payable to) external onlyOwner {
+        require(address(this).balance > 0, "UNDER: There are no ETHs in the contract");
         to.sendValue(address(this).balance);
     } 
 
-    function withdrawStuckBEP20Tokens(address token, address to) external onlyOwner {
+    function withdrawStuckERC20Tokens(address token, address to) external onlyOwner {
         require(IERC20(token).balanceOf(address(this)) > 0, "UNDER: There are no tokens in the contract");
         require(IERC20(token).transfer(to, IERC20(token).balanceOf(address(this))));
     }
