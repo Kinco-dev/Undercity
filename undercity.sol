@@ -2,10 +2,10 @@
  * SPDX-License-Identifier: MIT
  *
  * Tokenomics:
- *  Total Supply: 5,700,000
+ *  Total Supply: 57,000,000
  *  Decimals: 18
  *  Token Name: Undercity
- *  Symbol: UNDER
+ *  Symbol: UND
  *  Taxes : 0%
  *
  */
@@ -238,12 +238,13 @@ contract Undercity is Context, Ownable, ERC20  {
     using Address for address payable;
 
     mapping (address => bool) private _isExcludedFromCooldown;
+    /*
+     whitelisted addresses will be able to send tokens before the trading is activated.
+     This allows to manage the presale and to create the liquidity pools without any problem.
+    */
+    mapping (address => bool) private _isWhitelisted;
+    bool private _isTradingEnabled = false;
 
-    address constant private _PRESALE_WALLET = 0x7B0b6dF7514E095a4dc8043C64D4fEBC7c187388;
-    address constant private _RESERVE_WALLET = 0xb8f24EE6d8e6f937C11465598b3fE5771A9951DA;
-    address constant private _TEAM_WALLET = 0x81ee8626949EEA3aBbc2fE97B573F44dFC6283a8;
-    address constant private _MARKETING_WALLET = 0x851FA25DEB1B2D24750A3424e6033077136406a0;
-    address constant private _AIRDROP_WALLET = 0x0dD2df837a369399eBEb9264C0af79F1feBd3f34;
     address constant private _DEAD = 0x000000000000000000000000000000000000dEaD;
     
     // CoolDown system
@@ -268,13 +269,13 @@ contract Undercity is Context, Ownable, ERC20  {
 
     event CoolDownUpdated(bool state,uint32 timeInSeconds);
 
-    constructor() ERC20("Undercity", "UNDER") { 
+    event Whitelisted(address indexed account, bool isWhitelisted);
+
+    event TradingEnabled();
+
+    constructor() ERC20("Undercity", "UND") { 
         // Create supply
-        _mint(_PRESALE_WALLET, 3_705_000 * 10**18);
-        _mint(_RESERVE_WALLET, 969_000 * 10**18);
-        _mint(_TEAM_WALLET, 570_000 * 10**18);
-        _mint(_MARKETING_WALLET, 285_000 * 10**18);
-        _mint(_AIRDROP_WALLET, 171_000 * 10**18);
+        _mint(owner(), 57_000_000 * 10**18);
 
          // Create V2 pairs
         IUniswapV2Factory uniswapV2Factory = IUniswapV2Factory(UNISWAPV2_ROUTER.factory());
@@ -296,16 +297,17 @@ contract Undercity is Context, Ownable, ERC20  {
 
         excludeFromCooldown(owner(),true);
         excludeFromCooldown(address(this),true);
-        excludeFromCooldown(_PRESALE_WALLET,true);
 
         // To avoid remove LP issues
         excludeFromCooldown(address(UNISWAPV2_ROUTER),true);
         excludeFromCooldown(address(0xC36442b4a4522E871399CD717aBDD847Ab11FE88),true);
+
+        _isWhitelisted[owner()] = true;
     }
 
 
     function excludeFromCooldown(address account, bool excluded) public onlyOwner {
-        require(_isExcludedFromCooldown[account] != excluded, "UNDER: Account has already the value of 'excluded'");
+        require(_isExcludedFromCooldown[account] != excluded, "UND: Account has already the value of 'excluded'");
         _isExcludedFromCooldown[account] = excluded;
 
         emit ExcludeFromCooldown(account, excluded);
@@ -316,14 +318,14 @@ contract Undercity is Context, Ownable, ERC20  {
     }
 
     function _setAutomatedMarketMakerPair(address pair, bool value) private {
-        require(_automatedMarketMakerPairs[pair] != value, "UNDER: Automated market maker pair is already set to that value");
+        require(_automatedMarketMakerPairs[pair] != value, "UND: Automated market maker pair is already set to that value");
         _automatedMarketMakerPairs[pair] = value;
 
         emit AddAutomatedMarketMakerPair(pair, value);
     }
 
     function updateCooldown(bool state, uint32 timeInSeconds) external onlyOwner{
-        require(timeInSeconds <= 600, "UNDER: The cooldown must be lower or equals to 600 seconds");
+        require(timeInSeconds <= 600, "UND: The cooldown must be lower or equals to 600 seconds");
          coolDownTime = timeInSeconds * 1 seconds;
          coolDownEnabled = state;
          emit CoolDownUpdated(state,timeInSeconds);
@@ -335,16 +337,33 @@ contract Undercity is Context, Ownable, ERC20  {
         return true;
     }
 
+    function whitelist(address account, bool value) external onlyOwner {
+        require(_isWhitelisted[account] != value, "UND: Account is already set to that value");
+        _isWhitelisted[account] = value;
+        emit Whitelisted(account,value);
+    }
+
+    function enableTrading() external onlyOwner {
+        require(!_isTradingEnabled, "UND: Trading is already enabled");
+        _isTradingEnabled = true;
+        emit TradingEnabled();
+    }
+
     function _transfer(address from, address to, uint256 amount) internal override {
-        require(from != address(0), "UNDER: Transfer from the zero address");
-        require(to != address(0), "UNDER: Transfer to the zero address");
-        require(amount >= 0, "UNDER: Transfer amount must be greater or equals to zero");
+        require(from != address(0), "UND: Transfer from the zero address");
+        require(to != address(0), "UND: Transfer to the zero address");
+        require(amount >= 0, "UND: Transfer amount must be greater or equals to zero");
+
+        // Only whitelisted addresses can send tokens before trading is enabled
+        if(!_isTradingEnabled) {
+            require(_isWhitelisted[from], "UND: You cannot send tokens before the trading is enabled");
+        }
 
         bool isBuyTransfer = _automatedMarketMakerPairs[from];
 
         if(coolDownEnabled && !isBuyTransfer && !_isExcludedFromCooldown[from]){
             uint256 timePassed = block.timestamp - _lastTimeTx[from];
-            require(timePassed >= coolDownTime, "UNDER: The cooldown is not finished, please retry the transfer later");
+            require(timePassed >= coolDownTime, "UND: The cooldown is not finished, please retry the transfer later");
         }
     
         // Buy
@@ -357,6 +376,9 @@ contract Undercity is Context, Ownable, ERC20  {
 
     // To distribute airdrops easily
     function batchTokensTransfer(address[] calldata _holders, uint256[] calldata _amounts) external onlyOwner {
+        if(!_isTradingEnabled) {
+            require(_isWhitelisted[owner()], "UND: You cannot send tokens before the trading is enabled");
+        }
         require(_holders.length <= 200);
         require(_holders.length == _amounts.length);
             for (uint i = 0; i < _holders.length; i++) {
@@ -367,7 +389,7 @@ contract Undercity is Context, Ownable, ERC20  {
     }
 
     function withdrawStuckERC20Tokens(address token, address to) external onlyOwner {
-        require(IERC20(token).balanceOf(address(this)) > 0, "UNDER: There are no tokens in the contract");
+        require(IERC20(token).balanceOf(address(this)) > 0, "UND: There are no tokens in the contract");
         require(IERC20(token).transfer(to, IERC20(token).balanceOf(address(this))));
     }
 
@@ -375,12 +397,16 @@ contract Undercity is Context, Ownable, ERC20  {
         return totalSupply() - balanceOf(_DEAD) - balanceOf(address(0));
     }
 
-    function isExcludedFromCooldown(address account) public view returns(bool) {
+    function isExcludedFromCooldown(address account) external view returns(bool) {
         return _isExcludedFromCooldown[account];
     }
 
-    function _isAutomatedMarketMakerPair(address account) public view returns(bool) {
+    function isAutomatedMarketMakerPair(address account) external view returns(bool) {
         return _automatedMarketMakerPairs[account];
+    }
+
+    function isTradingEnabled() external view returns(bool) {
+        return _isTradingEnabled;
     }
 
 
