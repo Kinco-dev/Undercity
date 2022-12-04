@@ -355,9 +355,7 @@ contract Undercity is Context, Ownable, ERC20  {
         require(amount >= 0, "UND: Transfer amount must be greater or equals to zero");
 
         // Only whitelisted addresses can send tokens before trading is enabled
-        if(!_isTradingEnabled) {
-            require(_isWhitelisted[from], "UND: You cannot send tokens before the trading is enabled");
-        }
+            require(_isTradingEnabled || _isWhitelisted[from], "UND: You cannot send tokens before the trading is enabled");
 
         bool isBuyTransfer = _automatedMarketMakerPairs[from];
 
